@@ -36,6 +36,9 @@
 
 #include <json/json.h>
 
+#include <range/v3/span.hpp>
+#include <range/v3/view/transform.hpp>
+
 #include <memory>
 #include <optional>
 #include <string>
@@ -496,7 +499,13 @@ public:
 	std::vector<EnumDefinition const*> definedEnums() const { return filteredNodes<EnumDefinition>(m_subNodes); }
 	std::vector<VariableDeclaration const*> stateVariables() const { return filteredNodes<VariableDeclaration>(m_subNodes); }
 	std::vector<ModifierDefinition const*> functionModifiers() const { return filteredNodes<ModifierDefinition>(m_subNodes); }
-	std::vector<FunctionDefinition const*> definedFunctions() const { return filteredNodes<FunctionDefinition>(m_subNodes); }
+	auto definedFunctions() const {
+		return definedFunctionsByName() | ranges::views::transform([](auto const& _item) { return _item.second; });
+	}
+	auto definedFunctions(std::string const& _name) const {
+		auto&& [b, e] = definedFunctionsByName().equal_range(_name);
+		return ranges::span<decltype(*b)>(b, e) | ranges::views::transform([](auto const& _item) { return _item.second; });
+	}
 	std::vector<EventDefinition const*> events() const { return filteredNodes<EventDefinition>(m_subNodes); }
 	std::vector<EventDefinition const*> const& interfaceEvents() const;
 	/// @returns all errors defined in this contract or any base contract
@@ -546,6 +555,8 @@ public:
 	FunctionDefinition const* nextConstructor(ContractDefinition const& _mostDerivedContract) const;
 
 private:
+	std::multimap<std::string, FunctionDefinition const*> const& definedFunctionsByName() const;
+
 	std::vector<ASTPointer<InheritanceSpecifier>> m_baseContracts;
 	std::vector<ASTPointer<ASTNode>> m_subNodes;
 	ContractKind m_contractKind;
@@ -553,6 +564,7 @@ private:
 
 	util::LazyInit<std::vector<std::pair<util::FixedHash<4>, FunctionTypePointer>>> m_interfaceFunctionList[2];
 	util::LazyInit<std::vector<EventDefinition const*>> m_interfaceEvents;
+	util::LazyInit<std::multimap<std::string, FunctionDefinition const*>> m_definedFunctionsByName;
 };
 
 /**

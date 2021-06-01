@@ -29,6 +29,9 @@
 #include <libsolidity/ast/TypeProvider.h>
 #include <libsolutil/Keccak256.h>
 
+#include <range/v3/view/map.hpp>
+#include <range/v3/span.hpp>
+
 #include <boost/algorithm/string.hpp>
 
 #include <algorithm>
@@ -276,6 +279,17 @@ FunctionDefinition const* ContractDefinition::nextConstructor(ContractDefinition
 	return nullptr;
 }
 
+multimap<std::string, FunctionDefinition const*> ContractDefinition::definedFunctionsByName() const
+{
+	return m_definedFunctionsByName.init([&]{
+		std::multimap<std::string, FunctionDefinition const*> result;
+		for (FunctionDefinition const* fun: filteredNodes<FunctionDefinition>(m_subNodes))
+			result.insert({fun->name(), fun});
+		return result;
+	});
+}
+
+
 TypeNameAnnotation& TypeName::annotation() const
 {
 	return initAnnotation<TypeNameAnnotation>();
@@ -397,6 +411,7 @@ FunctionDefinition const& FunctionDefinition::resolveVirtual(
 ) const
 {
 	solAssert(!isConstructor(), "");
+	solAssert(!name().empty(), "");
 	// If we are not doing super-lookup and the function is not virtual, we can stop here.
 	if (_searchStart == nullptr && !virtualSemantics())
 		return *this;
@@ -412,10 +427,8 @@ FunctionDefinition const& FunctionDefinition::resolveVirtual(
 		if (_searchStart != nullptr && c != _searchStart)
 			continue;
 		_searchStart = nullptr;
-		for (FunctionDefinition const* function: c->definedFunctions())
+		for (FunctionDefinition const* function: c->definedFunctions(name()))
 			if (
-				function->name() == name() &&
-				!function->isConstructor() &&
 				FunctionType(*function).asExternallyCallableFunction(false)->hasEqualParameterTypes(*functionType)
 			)
 				return *function;
